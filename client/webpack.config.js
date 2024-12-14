@@ -1,121 +1,121 @@
-const Webpack = require("webpack");
-const Path = require("path");
-const TerserPlugin = require("terser-webpack-plugin");
-const MiniCssExtractPlugin = require("mini-css-extract-plugin");
-const CssMinimizerPlugin = require("css-minimizer-webpack-plugin");
-const CopyWebpackPlugin = require("copy-webpack-plugin");
-const FileManagerPlugin = require("filemanager-webpack-plugin");
+const path = require('path')
+const glob = require('glob')
+const HtmlWebpackPlugin = require('html-webpack-plugin')
+const MiniCssExtractPlugin = require('mini-css-extract-plugin')
 
-const opts = {
-  rootDir: process.cwd(),
-  devBuild: process.env.NODE_ENV !== "production"
-};
+const INCLUDE_PATTERN = /<include src="(.+)"\s*\/?>(?:<\/include>)?/gi
+const processNestedHtml = (content, loaderContext, dir = null) =>
+  !INCLUDE_PATTERN.test(content)
+    ? content
+    : content.replace(INCLUDE_PATTERN, (m, src) => {
+        const filePath = path.resolve(dir || loaderContext.context, src)
+        loaderContext.dependency(filePath)
+        return processNestedHtml(
+          loaderContext.fs.readFileSync(filePath, 'utf8'),
+          loaderContext,
+          path.dirname(filePath)
+        )
+      })
+
+// HTML generation
+const paths = []
+const generateHTMLPlugins = () =>
+  glob.sync('./src/*.html').map((dir) => {
+    const filename = path.basename(dir)
+
+    if (filename !== '404.html') {
+      paths.push(filename)
+    }
+
+    return new HtmlWebpackPlugin({
+      filename,
+      template: `./src/${filename}`,
+      favicon: `./src/images/favicon.ico`,
+      inject: 'body',
+    })
+  })
 
 module.exports = {
-  entry: {
-    app: "./src/js/app.js"
-  },
-  mode: process.env.NODE_ENV === "production" ? "production" : "development",
-  devtool:
-    process.env.NODE_ENV === "production" ? "source-map" : "inline-source-map",
-  output: {
-    path: Path.join(opts.rootDir, "dist"),
-    pathinfo: opts.devBuild,
-    filename: "js/[name].js",
-    chunkFilename: 'js/[name].js',
-  },
-  performance: { hints: false },
-  optimization: {
-    minimizer: [
-      new TerserPlugin({
-        parallel: true,
-        terserOptions: {
-          ecma: 5
-        }
-      }),
-      new CssMinimizerPlugin({})
-    ],
-    runtimeChunk: false
-  },
-  plugins: [
-    // Extract css files to seperate bundle
-    new MiniCssExtractPlugin({
-      filename: "css/app.css",
-      chunkFilename: "css/app.css"
-    }),
-    // Copy fonts and images to dist
-    new CopyWebpackPlugin({
-      patterns: [
-        { from: "src/fonts", to: "fonts" },
-        { from: "src/img", to: "img" }
-      ]
-    }),
-    // Copy dist folder to static
-    ...(process.env.NODE_ENV === "production")? [
-      new FileManagerPlugin({
-        events: {
-          onEnd: {
-            copy: [
-              { source: "./dist/", destination: "./static" }
-            ]
-          }
-        },
-      })
-    ] : [],
-  ],
-  module: {
-    rules: [
-      // Babel-loader
-      {
-        test: /\.js$/,
-        exclude: /(node_modules)/,
-        use: {
-          loader: "babel-loader",
-          options: {
-            cacheDirectory: true
-          }
-        }
-      },
-      // Css-loader & sass-loader
-      {
-        test: /\.(sa|sc|c)ss$/,
-        use: [
-          MiniCssExtractPlugin.loader,
-          "css-loader",
-          "postcss-loader",
-          "sass-loader"
-        ]
-      },
-      // Load fonts
-      {
-        test: /\.(woff(2)?|ttf|eot|svg)(\?v=\d+\.\d+\.\d+)?$/,
-        type: "asset/resource",
-        generator: {
-          filename: "fonts/[name][ext]"
-        }
-      },
-      // Load images
-      {
-        test: /\.(png|jpg|jpeg|gif)(\?v=\d+\.\d+\.\d+)?$/,
-        type: "asset/resource",
-        generator: {
-          filename: "img/[name][ext]"
-        }
-      },
-    ]
-  },
-  resolve: {
-    extensions: [".js", ".scss"],
-    modules: ["node_modules"],
-    alias: {
-      request$: "xhr"
-    }
-  },
+  mode: 'development',
+  entry: './src/js/index.js',
   devServer: {
     static: {
-      directory: Path.join(__dirname, "static")
+      directory: path.join(__dirname, './build'),
     },
-    port: 8080,
-    open: true
-  }
-};
+    compress: true,
+    port: 3000,
+  },
+  module: {
+    rules: [
+      {
+        test: /\.m?js$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: ['@babel/preset-env'],
+            plugins: [
+              [
+                'prismjs',
+                {
+                  languages: ['javascript', 'css', 'markup'],
+                  plugins: ['copy-to-clipboard'],
+                  css: true,
+                },
+              ],
+            ],
+          },
+        },
+      },
+      {
+        test: /\.css$/i,
+        use: [
+          MiniCssExtractPlugin.loader,
+          'css-loader',
+          {
+            loader: 'postcss-loader',
+            options: {
+              postcssOptions: {
+                plugins: [
+                  require('autoprefixer')({
+                    overrideBrowserslist: ['last 2 versions'],
+                  }),
+                ],
+              },
+            },
+          },
+        ],
+      },
+      {
+        test: /\.(png|svg|jpg|jpeg|gif)$/i,
+        type: 'asset/resource',
+      },
+      {
+        test: /\.(woff|woff2|eot|ttf|otf)$/i,
+        type: 'asset/resource',
+      },
+      {
+        test: /\.html$/,
+        loader: 'html-loader',
+        options: {
+          preprocessor: processNestedHtml,
+        },
+      },
+    ],
+  },
+  plugins: [
+    ...generateHTMLPlugins(),
+    new MiniCssExtractPlugin({
+      filename: 'style.css',
+      chunkFilename: 'style.css',
+    }),
+  ],
+  output: {
+    filename: 'bundle.js',
+    path: path.resolve(__dirname, 'build'),
+    clean: true,
+    assetModuleFilename: '[path][name][ext]',
+  },
+  target: 'web', // fix for "browserslist" error message
+  stats: 'errors-only', // suppress irrelevant log messages
+}
