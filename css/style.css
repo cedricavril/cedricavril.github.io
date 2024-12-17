@@ -2096,3 +2096,39 @@ figure figcaption {
       background-color: rgba(255, 255, 255, 0.5); }
     .single-text .owl-dots .owl-dot.active > span {
       background-color: #fff; }
+
+/* mes modifs */
+.dot {
+  position: relative;
+  border-radius: 40px;
+}
+
+.dot-container {
+  position: absolute;
+  background-color: red;
+  left: 120px;
+  border-radius: 40px;
+  width: 0.6rem;
+  height: 0.6rem;
+  top: -3px;
+}
+
+.heartbeat {
+  position: absolute;
+  background-color: red;
+  border-radius: 40px;
+  left: -1px;
+  width: 0.75rem;
+  height: 0.75rem;
+  opacity: 0.75;
+  animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+  top: -0.1rem;
+}
+
+@keyframes ping {
+  75%,
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
